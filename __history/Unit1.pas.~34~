@@ -1,0 +1,436 @@
+unit Unit1;
+
+interface
+
+uses
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants,
+  System.Classes, Vcl.Graphics,
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.ExtDlgs, Vcl.Buttons, Vcl.StdCtrls,
+  IniFiles,  Xml.xmldom, Xml.XMLIntf, Xml.XMLDoc,
+  Vcl.OleServer, Excel2000, DateUtils;
+
+type
+  TForm1 = class(TForm)
+    ListBox1: TListBox;
+    Button1: TButton;
+    Додати: TBitBtn;
+    BitBtn2: TBitBtn;
+    BitBtn3: TBitBtn;
+    SD: TSaveDialog;
+    OD: TOpenDialog;
+    XMLDocument1: TXMLDocument;
+    XLApp: TExcelApplication;
+    Memo1: TMemo;
+    DocNo: TListBox;
+    procedure Button1Click(Sender: TObject);
+    procedure FormShow(Sender: TObject);
+    procedure ДодатиClick(Sender: TObject);
+    procedure BitBtn2Click(Sender: TObject);
+    procedure BitBtn3Click(Sender: TObject);
+  private
+    { Private declarations }
+    Ini: TIniFile;
+  public
+    { Public declarations }
+  end;
+
+var
+  Form1: TForm1;
+
+implementation
+
+{$R *.dfm}
+
+uses OKCANCL2;
+
+function Conv(val: Variant): string;
+var
+  s: string;
+begin
+
+  s:= StringReplace(val, '^%$#@', '', [rfReplaceAll, rfIgnoreCase]);
+  result := s;
+end;
+
+function ConvDate(val: Variant): string;
+var
+  s: string;
+begin
+  s := val;
+  s := s[7] + s[8] + s[9] + s[10] + '-' + s[4] + s[5] + '-' + s[1] +s[2] ;
+  result := s;
+end;
+
+procedure TForm1.BitBtn2Click(Sender: TObject);
+begin
+  if ListBox1.ItemIndex >= 0 then
+  begin
+    OKRightDlg.Edit1.text := ListBox1.Items[ListBox1.ItemIndex];
+    OKRightDlg.Edit1.Enabled := false;
+    OKRightDlg.Edit2.text := Ini.ReadString('orders',
+      OKRightDlg.Edit1.text, '');
+    OKRightDlg.ShowModal;
+    if OKRightDlg.status then
+    begin
+      Ini.WriteString('orders', OKRightDlg.Edit1.text, OKRightDlg.Edit2.text);
+      Ini.ReadSection('orders', ListBox1.Items);
+    end;
+    OKRightDlg.Edit1.Enabled := true;
+  end
+  else
+    application.MessageBox('Рахунок для редагування не вибрано',
+      'Редагування', 0);
+end;
+
+procedure TForm1.BitBtn3Click(Sender: TObject);
+begin
+  if ListBox1.ItemIndex >= 0 then
+  begin
+
+    if application.MessageBox
+      (PChar('Видалити рахунок "' + ListBox1.Items[ListBox1.ItemIndex] + '" ?'),
+      'Видалення', 1) = idok then
+    begin
+      Ini.DeleteKey('orders', ListBox1.Items[ListBox1.ItemIndex]);
+      Ini.ReadSection('orders', ListBox1.Items);
+    end;
+  end
+  else
+    application.MessageBox('Рахунок для видалення не вибрано', 'Видалення', 0);
+
+end;
+
+procedure TForm1.Button1Click(Sender: TObject);
+var
+  s,s1: string;
+  WorkBk: _WorkBook;
+  WorkSheet: _WorkSheet;
+  K, R, X, Y, I: Integer;
+  doit:integer;
+  IIndex: OleVariant;
+  RangeMatrix: Variant;
+  і, iban: string;
+begin
+  if ListBox1.ItemIndex >= 0 then
+  begin
+    iban := Ini.ReadString('orders', ListBox1.Items[ListBox1.ItemIndex], '');
+
+    if OD.Execute then
+    begin
+      try
+        IIndex := 1;
+        XLApp.Connect;
+        // Открываем файл Excel
+        XLApp.WorkBooks.Open(OD.FileName, EmptyParam, EmptyParam, EmptyParam,
+          EmptyParam, EmptyParam, EmptyParam, EmptyParam, EmptyParam,
+          EmptyParam, EmptyParam, EmptyParam, EmptyParam, 0);
+        WorkBk := XLApp.WorkBooks.Item[IIndex];
+        WorkSheet := WorkBk.WorkSheets.Get_Item(1) as _WorkSheet;
+        // Чтобы знать размер листа (WorkSheet), т.е. количество строк и количество
+        // столбцов, мы активируем его последнюю непустую ячейку
+        WorkSheet.Cells.SpecialCells(xlCellTypeLastCell, EmptyParam).Activate;
+        // Получаем значение последней строки
+        X := XLApp.ActiveCell.Row;
+        // Получаем значение последней колонки
+        Y := XLApp.ActiveCell.Column;
+        // Определяем количество колонок в TStringGrid
+        // GenericStringGrid.ColCount := Y;
+        // Сопоставляем матрицу WorkSheet с нашей Delphi матрицей
+        // RangeMatrix := XLApp.Range['A1', XLApp.Cells.Item[X, Y]].Value;
+        // Выходим из Excel и отсоединяемся от сервера
+
+        if X > 2 then
+        begin
+          DocNo.items.Clear;
+          Memo1.Lines.Clear;
+          Memo1.Lines.Add('<?xml version="1.0" encoding="Windows-1251"?>');
+          Memo1.Lines.Add
+            ('<_1CClientBankExchange xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">');
+          Memo1.Lines.Add('<ВерсияФормата>2.00</ВерсияФормата>');
+          Memo1.Lines.Add('<Отправитель>Система "Клієнт-Банк"</Отправитель>');
+          Memo1.Lines.Add
+            ('<Плательщик>Business automation software for accounting</Плательщик>');
+          Memo1.Lines.Add('<ДатаСоздания>' + IntToStr(Integer(YearOf(now))) +
+            '-' + IntToStr(Integer(MonthOf(now))) + '-' + IntToStr(Integer(MonthOf(now))) + '</ДатаСоздания>');
+          Memo1.Lines.Add('<ДатаНачала>' + IntToStr(Integer(YearOf(now))) +
+            '-01-01</ДатаНачала>');
+          Memo1.Lines.Add('<ДатаКонца>' + IntToStr(Integer(YearOf(now))) +'-12-31</ДатаКонца>');
+          Memo1.Lines.Add('<РасчСчет>UA933204780000026009924860512</РасчСчет>');
+        	Memo1.Lines.Add('<КодВалюты>980</КодВалюты>');
+          for I := X downto 1 do
+          begin
+//             memo1.Lines.Add(XLApp.Cells.Item[i,8]);
+              if True then begin
+                  s := XLApp.Cells.Item[I, 8];
+                  if s = '2' then
+                  begin
+                    s := XLApp.Cells.Item[I, 30];
+                    if s = iban then
+                    begin
+                      Memo1.Lines.Add('<СекцияДокумент>');
+                      Memo1.Lines.Add
+                        ('	<ВидДокумента>Платежное поручение</ВидДокумента>');
+                      Memo1.Lines.Add('	<Номер>' + Conv(XLApp.Cells.Item[I, 6]) +
+                        '</Номер>');
+                      Memo1.Lines.Add('	<Дата>' + ConvDate(XLApp.Cells.Item[I, 1]) +
+                        '</Дата>');
+                      Memo1.Lines.Add('	<ДокументИД>' + Conv(XLApp.Cells.Item[I, 6]) +
+                        '</ДокументИД>');
+                      Memo1.Lines.Add('	<Сумма>' + Conv(XLApp.Cells.Item[I, 18]) +
+                        '</Сумма>');
+                      Memo1.Lines.Add('	<КодВалюты>' + Conv(XLApp.Cells.Item[I, 17]) +
+                        '</КодВалюты>');
+                      Memo1.Lines.Add('	<Получатель>' + Conv(XLApp.Cells.Item[I, 12])
+                        + '</Получатель>');
+                      Memo1.Lines.Add('	<ПолучательСчет>' + Conv(XLApp.Cells.Item[I,
+                        31]) + '</ПолучательСчет>');
+                      Memo1.Lines.Add('	<ПолучательОКПО>' + Conv(XLApp.Cells.Item[I,
+                        11]) + '</ПолучательОКПО>');
+                      Memo1.Lines.Add
+                        ('	<ПолучательБанк>АБ "УКРГАЗБАНК"</ПолучательБанк>');
+                      Memo1.Lines.Add('	<ПолучательМФО>' + Conv(XLApp.Cells.Item[I, 9]
+                        ) + '</ПолучательМФО>');
+                      Memo1.Lines.Add('	<Плательщик>' + Conv(XLApp.Cells.Item[I, 5]) +
+                        '</Плательщик>');
+                      Memo1.Lines.Add('	<ПлательщикСчет>' + Conv(XLApp.Cells.Item[I,
+                        30]) + '</ПлательщикСчет>');
+                      Memo1.Lines.Add('	<ПлательщикОКПО>' + Conv(XLApp.Cells.Item[I,
+                        4]) + '</ПлательщикОКПО>');
+                      Memo1.Lines.Add
+                        ('	<ПлательщикБанк>АБ "УКРГАЗБАНК"</ПлательщикБанк>');
+                      Memo1.Lines.Add('	<ПлательщикМФО>' + Conv(XLApp.Cells.Item[I, 2]
+                        ) + '</ПлательщикМФО>');
+                      Memo1.Lines.Add('	<НазначениеПлатежа>' +
+                        Conv(XLApp.Cells.Item[I, 20]) + '</НазначениеПлатежа>');
+                      Memo1.Lines.Add('</СекцияДокумент>');
+                    end;
+                  end
+                  else
+                  begin
+                    s := XLApp.Cells.Item[I, 30];
+                    if s = iban then
+                    begin
+                      Memo1.Lines.Add('<СекцияДокумент>');
+                      Memo1.Lines.Add
+                        ('	<ВидДокумента>Платежное поручение</ВидДокумента>');
+                      Memo1.Lines.Add('	<Номер>' + Conv(XLApp.Cells.Item[I, 6]) +
+                        '</Номер>');
+                      Memo1.Lines.Add('	<Дата>' + ConvDate(XLApp.Cells.Item[I, 1]) +
+                        '</Дата>');
+                      Memo1.Lines.Add('	<ДокументИД>' + Conv(XLApp.Cells.Item[I, 6]) +
+                        '</ДокументИД>');
+                      Memo1.Lines.Add('	<Сумма>' + Conv(XLApp.Cells.Item[I, 18]) +
+                        '</Сумма>');
+                      Memo1.Lines.Add('	<КодВалюты>' + Conv(XLApp.Cells.Item[I, 17]) +
+                        '</КодВалюты>');
+                      Memo1.Lines.Add('	<Получатель>' + Conv(XLApp.Cells.Item[I, 5]) +
+                        '</Получатель>');
+                      Memo1.Lines.Add('	<ПолучательСчет>' + Conv(XLApp.Cells.Item[I,
+                        30]) + '</ПолучательСчет>');
+                      Memo1.Lines.Add('	<ПолучательОКПО>' + Conv(XLApp.Cells.Item[I,
+                        4]) + '</ПолучательОКПО>');
+                      Memo1.Lines.Add
+                        ('	<ПолучательБанк>АБ "УКРГАЗБАНК"</ПолучательБанк>');
+                      Memo1.Lines.Add('	<ПолучательМФО>' + Conv(XLApp.Cells.Item[I, 2]
+                        ) + '</ПолучательМФО>');
+                      Memo1.Lines.Add('	<Плательщик>' + Conv(XLApp.Cells.Item[I, 12])
+                        + '</Плательщик>');
+                      Memo1.Lines.Add('	<ПлательщикСчет>' + Conv(XLApp.Cells.Item[I,
+                        31]) + '</ПлательщикСчет>');
+                      Memo1.Lines.Add('	<ПлательщикОКПО>' + Conv(XLApp.Cells.Item[I,
+                        11]) + '</ПлательщикОКПО>');
+                      Memo1.Lines.Add
+                        ('	<ПлательщикБанк>АБ "УКРГАЗБАНК"</ПлательщикБанк>');
+                      Memo1.Lines.Add('	<ПлательщикМФО>' + Conv(XLApp.Cells.Item[I, 9]
+                        ) + '</ПлательщикМФО>');
+                      Memo1.Lines.Add('	<НазначениеПлатежа>' +
+                        Conv(XLApp.Cells.Item[I, 20]) + '</НазначениеПлатежа>');
+                      Memo1.Lines.Add('</СекцияДокумент>');
+                    end;
+
+                  end;
+              end else begin
+
+                    s := XLApp.Cells.Item[I, 1];
+                    if DocNo.Items.Capacity >0 then begin
+                      doit := 0;
+                      for k := 0 to DocNo.Items.Capacity-1 do begin
+                          if s = DocNo.Items.Strings[k] then inc(doit);
+
+                      end;
+
+                    end else begin
+                      doit := 0;
+
+                    end;
+                    if doit = 0 then begin
+
+                      s := XLApp.Cells.Item[I, 7];
+                      s1 := XLApp.Cells.Item[I, 3];
+                      if (s = iban) or (s1 = iban) then begin
+                      DocNo.Items.Add(XLApp.Cells.Item[I, 1]);
+                          Memo1.Lines.Add('<СекцияДокумент>');
+                          Memo1.Lines.Add('	<ВидДокумента>Платежное поручение</ВидДокумента>');
+                          Memo1.Lines.Add('	<Номер>' + Conv(XLApp.Cells.Item[I, 1]) + '</Номер>');
+                          Memo1.Lines.Add('	<Дата>' + ConvDate(XLApp.Cells.Item[I, 10]) + '</Дата>');
+                          Memo1.Lines.Add('	<ДокументИД>' + Conv(XLApp.Cells.Item[I, 1]) + '</ДокументИД>');
+                          Memo1.Lines.Add('	<Сумма>' + Conv(XLApp.Cells.Item[I, 13]) + '</Сумма>');
+                          Memo1.Lines.Add('	<КодВалюты>' + Conv(XLApp.Cells.Item[I, 16]) + '</КодВалюты>');
+                          Memo1.Lines.Add('	<КодВалюты>980</КодВалюты>');
+                          Memo1.Lines.Add('	<Получатель>' + Conv(XLApp.Cells.Item[I, 6])+ '</Получатель>');
+                          Memo1.Lines.Add('	<ПолучательСчет>' + Conv(XLApp.Cells.Item[I,7]) + '</ПолучательСчет>');
+                          Memo1.Lines.Add('	<ПолучательОКПО>' + Conv(XLApp.Cells.Item[I, 8]) + '</ПолучательОКПО>');
+                          Memo1.Lines.Add('	<ПолучательБанк>АБ "УКРГАЗБАНК"</ПолучательБанк>');
+                          Memo1.Lines.Add('	<ПолучательМФО>' + Conv(XLApp.Cells.Item[I, 9]) + '</ПолучательМФО>');
+                          Memo1.Lines.Add('	<Плательщик>' + Conv(XLApp.Cells.Item[I, 2]) + '</Плательщик>');
+                          Memo1.Lines.Add('	<ПлательщикСчет>' + Conv(XLApp.Cells.Item[I,3]) + '</ПлательщикСчет>');
+                          Memo1.Lines.Add('	<ПлательщикОКПО>' + Conv(XLApp.Cells.Item[I, 4]) + '</ПлательщикОКПО>');
+                          Memo1.Lines.Add('	<ПлательщикБанк>АБ "УКРГАЗБАНК"</ПлательщикБанк>');
+                          Memo1.Lines.Add('	<ПлательщикМФО>' + Conv(XLApp.Cells.Item[I, 5]) + '</ПлательщикМФО>');
+                          Memo1.Lines.Add('	<НазначениеПлатежа>' +Conv(XLApp.Cells.Item[I, 15]) + '</НазначениеПлатежа>');
+                          Memo1.Lines.Add('</СекцияДокумент>');
+                      end;
+                  end;
+              end;
+          end;
+        end;
+      finally
+        XLApp.Quit;
+        XLApp.Disconnect;
+      end;
+      Memo1.Lines.Add('</_1CClientBankExchange>');
+      if SD.Execute then
+      begin
+        Memo1.Lines.SaveToFile(SD.FileName + '.xml');
+        application.MessageBox('Файл сформовано!', 'Виконання конвертації', 0);
+      end
+      else
+        application.MessageBox('УПС!! Файл не було сформовано!',
+          'Виконання конвертації', 0);
+    end;
+  end
+  else
+    application.MessageBox('Рахунок для конвертації не вибрано',
+      'Виконання конвертації', 0);
+end;
+
+procedure TForm1.FormShow(Sender: TObject);
+var
+  FileName: string;
+begin
+  FileName := ExtractFileDir(application.ExeName) + '\rr.ini';
+  // if not FileExists(FileName) then begin
+  // Ini := TIniFile.Create(FileName);
+  //
+  //
+  // end else begin
+  // Ini := TIniFile.Create(FileName);
+  // end;
+  Ini := TIniFile.Create(FileName);
+  Ini.ReadSection('orders', ListBox1.Items);
+end;
+
+procedure TForm1.ДодатиClick(Sender: TObject);
+begin
+  OKRightDlg.Edit1.Clear;
+  OKRightDlg.Edit2.Clear;
+  OKRightDlg.ShowModal;
+  if OKRightDlg.status then
+  begin
+    Ini.WriteString('orders', OKRightDlg.Edit1.text, OKRightDlg.Edit2.text);
+    Ini.ReadSection('orders', ListBox1.Items);
+  end;
+
+end;
+
+end.
+//
+//
+//            s := XLApp.Cells.Item[I, 8];
+//            if s = '2' then
+//            begin
+//              s := XLApp.Cells.Item[I, 30];
+//              if s = iban then
+//              begin
+//                Memo1.Lines.Add('<СекцияДокумент>');
+//                Memo1.Lines.Add
+//                  ('	<ВидДокумента>Платежное поручение</ВидДокумента>');
+//                Memo1.Lines.Add('	<Номер>' + Conv(XLApp.Cells.Item[I, 6]) +
+//                  '</Номер>');
+//                Memo1.Lines.Add('	<Дата>' + ConvDate(XLApp.Cells.Item[I, 1]) +
+//                  '</Дата>');
+//                Memo1.Lines.Add('	<ДокументИД>' + Conv(XLApp.Cells.Item[I, 6]) +
+//                  '</ДокументИД>');
+//                Memo1.Lines.Add('	<Сумма>' + Conv(XLApp.Cells.Item[I, 18]) +
+//                  '</Сумма>');
+//                Memo1.Lines.Add('	<КодВалюты>' + Conv(XLApp.Cells.Item[I, 17]) +
+//                  '</КодВалюты>');
+//                Memo1.Lines.Add('	<Получатель>' + Conv(XLApp.Cells.Item[I, 12])
+//                  + '</Получатель>');
+//                Memo1.Lines.Add('	<ПолучательСчет>' + Conv(XLApp.Cells.Item[I,
+//                  31]) + '</ПолучательСчет>');
+//                Memo1.Lines.Add('	<ПолучательОКПО>' + Conv(XLApp.Cells.Item[I,
+//                  11]) + '</ПолучательОКПО>');
+//                Memo1.Lines.Add
+//                  ('	<ПолучательБанк>АБ "УКРГАЗБАНК"</ПолучательБанк>');
+//                Memo1.Lines.Add('	<ПолучательМФО>' + Conv(XLApp.Cells.Item[I, 9]
+//                  ) + '</ПолучательМФО>');
+//                Memo1.Lines.Add('	<Плательщик>' + Conv(XLApp.Cells.Item[I, 5]) +
+//                  '</Плательщик>');
+//                Memo1.Lines.Add('	<ПлательщикСчет>' + Conv(XLApp.Cells.Item[I,
+//                  30]) + '</ПлательщикСчет>');
+//                Memo1.Lines.Add('	<ПлательщикОКПО>' + Conv(XLApp.Cells.Item[I,
+//                  4]) + '</ПлательщикОКПО>');
+//                Memo1.Lines.Add
+//                  ('	<ПлательщикБанк>АБ "УКРГАЗБАНК"</ПлательщикБанк>');
+//                Memo1.Lines.Add('	<ПлательщикМФО>' + Conv(XLApp.Cells.Item[I, 2]
+//                  ) + '</ПлательщикМФО>');
+//                Memo1.Lines.Add('	<НазначениеПлатежа>' +
+//                  Conv(XLApp.Cells.Item[I, 20]) + '</НазначениеПлатежа>');
+//                Memo1.Lines.Add('</СекцияДокумент>');
+//              end;
+//            end
+//            else
+//            begin
+//              s := XLApp.Cells.Item[I, 30];
+//              if s = iban then
+//              begin
+//                Memo1.Lines.Add('<СекцияДокумент>');
+//                Memo1.Lines.Add
+//                  ('	<ВидДокумента>Платежное поручение</ВидДокумента>');
+//                Memo1.Lines.Add('	<Номер>' + Conv(XLApp.Cells.Item[I, 6]) +
+//                  '</Номер>');
+//                Memo1.Lines.Add('	<Дата>' + ConvDate(XLApp.Cells.Item[I, 1]) +
+//                  '</Дата>');
+//                Memo1.Lines.Add('	<ДокументИД>' + Conv(XLApp.Cells.Item[I, 6]) +
+//                  '</ДокументИД>');
+//                Memo1.Lines.Add('	<Сумма>' + Conv(XLApp.Cells.Item[I, 18]) +
+//                  '</Сумма>');
+//                Memo1.Lines.Add('	<КодВалюты>' + Conv(XLApp.Cells.Item[I, 17]) +
+//                  '</КодВалюты>');
+//                Memo1.Lines.Add('	<Получатель>' + Conv(XLApp.Cells.Item[I, 5]) +
+//                  '</Получатель>');
+//                Memo1.Lines.Add('	<ПолучательСчет>' + Conv(XLApp.Cells.Item[I,
+//                  30]) + '</ПолучательСчет>');
+//                Memo1.Lines.Add('	<ПолучательОКПО>' + Conv(XLApp.Cells.Item[I,
+//                  4]) + '</ПолучательОКПО>');
+//                Memo1.Lines.Add
+//                  ('	<ПолучательБанк>АБ "УКРГАЗБАНК"</ПолучательБанк>');
+//                Memo1.Lines.Add('	<ПолучательМФО>' + Conv(XLApp.Cells.Item[I, 2]
+//                  ) + '</ПолучательМФО>');
+//                Memo1.Lines.Add('	<Плательщик>' + Conv(XLApp.Cells.Item[I, 12])
+//                  + '</Плательщик>');
+//                Memo1.Lines.Add('	<ПлательщикСчет>' + Conv(XLApp.Cells.Item[I,
+//                  31]) + '</ПлательщикСчет>');
+//                Memo1.Lines.Add('	<ПлательщикОКПО>' + Conv(XLApp.Cells.Item[I,
+//                  11]) + '</ПлательщикОКПО>');
+//                Memo1.Lines.Add
+//                  ('	<ПлательщикБанк>АБ "УКРГАЗБАНК"</ПлательщикБанк>');
+//                Memo1.Lines.Add('	<ПлательщикМФО>' + Conv(XLApp.Cells.Item[I, 9]
+//                  ) + '</ПлательщикМФО>');
+//                Memo1.Lines.Add('	<НазначениеПлатежа>' +
+//                  Conv(XLApp.Cells.Item[I, 20]) + '</НазначениеПлатежа>');
+//                Memo1.Lines.Add('</СекцияДокумент>');
+//              end;
+//
+//            end;
