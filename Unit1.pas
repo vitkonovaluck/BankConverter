@@ -157,7 +157,7 @@ begin
           Memo1.Lines.Add('<ДатаНачала>' + IntToStr(Integer(YearOf(now))) +
             '-01-01</ДатаНачала>');
           Memo1.Lines.Add('<ДатаКонца>' + IntToStr(Integer(YearOf(now))) +'-12-31</ДатаКонца>');
-          Memo1.Lines.Add('<РасчСчет>UA933204780000026009924860512</РасчСчет>');
+          Memo1.Lines.Add('<РасчСчет>'+iban+'</РасчСчет>');
         	Memo1.Lines.Add('<КодВалюты>980</КодВалюты>');
           for I := X downto 1 do
           begin
