@@ -7,7 +7,7 @@ uses
   System.Classes, Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.ExtDlgs, Vcl.Buttons, Vcl.StdCtrls,
   IniFiles,  Xml.xmldom, Xml.XMLIntf, Xml.XMLDoc,
-  Vcl.OleServer, Excel2000, DateUtils;
+  Vcl.OleServer, Excel2000, DateUtils, Excel_TLB;
 
 type
   TForm1 = class(TForm)
@@ -125,7 +125,7 @@ begin
         // Открываем файл Excel
         XLApp.WorkBooks.Open(OD.FileName, EmptyParam, EmptyParam, EmptyParam,
           EmptyParam, EmptyParam, EmptyParam, EmptyParam, EmptyParam,
-          EmptyParam, EmptyParam, EmptyParam, EmptyParam, 0);
+          EmptyParam, EmptyParam, EmptyParam, EmptyParam, EmptyParam, EmptyParam, 0);
         WorkBk := XLApp.WorkBooks.Item[IIndex];
         WorkSheet := WorkBk.WorkSheets.Get_Item(1) as _WorkSheet;
         // Чтобы знать размер листа (WorkSheet), т.е. количество строк и количество
@@ -321,11 +321,11 @@ var
   FileName: string;
   Date1, Date2: TDate;
 begin
-  Date1 := EncodeDate(2025, 10, 30);
+  Date1 := EncodeDate(2026, 04, 05);
   Date2 := Now; // поточна дата
 
   if Date2 > Date1 then begin
-     ShowMessage('УПС! Щось трапилось. Зверніться до розробника.');
+     ShowMessage('Oops! The component has expired. Please contact the developers.');
      Form1.close;
   end else begin
       FileName := ExtractFileDir(application.ExeName) + '\rr.ini';
